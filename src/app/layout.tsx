@@ -1,8 +1,9 @@
+import { Toaster } from "@/components/ui/toaster";
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
+import { ThemeProvider } from "next-themes";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ClerkProvider } from "@clerk/nextjs";
-import { ThemeProvider } from "next-themes";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
     absolute: "AI Resume Builder",
   },
   description:
-    "AI resume builder is the easiest way to build a professional resume",
+    "AI Resume Builder is the easiest way to create a professional resume that will help you land your dream job.",
 };
 
 export default function RootLayout({
@@ -31,6 +32,7 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             {children}
+            <Toaster />
           </ThemeProvider>
         </body>
       </html>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import usePremiumModal from "@/hooks/usePremiumModal";
+// import usePremiumModal from "@/hooks/usePremiumModal";
 import { PlusSquare } from "lucide-react";
 import Link from "next/link";
 
@@ -12,7 +12,7 @@ interface CreateResumeButtonProps {
 export default function CreateResumeButton({
   canCreate,
 }: CreateResumeButtonProps) {
-  const premiumModal = usePremiumModal();
+  // const premiumModal = usePremiumModal();
 
   if (canCreate) {
     return (
@@ -27,7 +27,7 @@ export default function CreateResumeButton({
 
   return (
     <Button
-      onClick={() => premiumModal.setOpen(true)}
+      // onClick={() => premiumModal.setOpen(true)}
       className="mx-auto flex w-fit gap-2"
     >
       <PlusSquare className="size-5" />

@@ -1,37 +1,20 @@
 "use server";
 
-// import { canCreateResume, canUseCustomizations } from "@/lib/permissions";
 import prisma from "@/lib/prisma";
-// import { getUserSubscriptionLevel } from "@/lib/subscription";
 import { resumeSchema, ResumeValues } from "@/lib/validation";
 import { auth } from "@clerk/nextjs/server";
 import { del, put } from "@vercel/blob";
-import path from "path";
 
 export async function saveResume(values: ResumeValues) {
+  console.log("Received values:", values);
+
   const { id } = values;
-
-  console.log("received values", values);
-
   const { photo, workExperiences, educations, ...resumeValues } =
     resumeSchema.parse(values);
 
   const { userId } = await auth();
-
   if (!userId) {
     throw new Error("User not authenticated");
-  }
-
-  // const subscriptionLevel = await getUserSubscriptionLevel(userId);
-
-  if (!id) {
-    const resumeCount = await prisma.resume.count({ where: { userId } });
-
-    // if (!canCreateResume(subscriptionLevel, resumeCount)) {
-    //   throw new Error(
-    //     "Maximum resume count reached for this subscription level"
-    //   );
-    // }
   }
 
   const existingResume = id
@@ -42,81 +25,94 @@ export async function saveResume(values: ResumeValues) {
     throw new Error("Resume not found");
   }
 
-  const hasCustomizations =
-    (resumeValues.borderStyle &&
-      resumeValues.borderStyle !== existingResume?.borderStyle) ||
-    (resumeValues.colorHex &&
-      resumeValues.colorHex !== existingResume?.colorHex);
+  let newPhotoUrl: string | null = existingResume?.photoUrl || null;
 
-  // if (hasCustomizations && !canUseCustomizations(subscriptionLevel)) {
-  //   throw new Error("Customizations not allowed for this subscription level");
-  // }
-
-  let newPhotoUrl: string | undefined | null = undefined;
-
+  // ✅ Check if a new photo file is being uploaded
   if (photo instanceof File) {
-    if (existingResume?.photoUrl) {
-      await del(existingResume.photoUrl);
-    }
+    console.log("Uploading new photo:", photo.name);
 
-    const blob = await put(`resume_photos/${path.extname(photo.name)}`, photo, {
-      access: "public",
-    });
+    try {
+      // Generate unique filename
+      const fileExt = photo.name.split(".").pop();
+      const fileName = `resume_photos/${userId}-${Date.now()}.${fileExt}`;
 
-    newPhotoUrl = blob.url;
-  } else if (photo === null) {
-    if (existingResume?.photoUrl) {
-      await del(existingResume.photoUrl);
+      // Delete old photo if exists
+      if (existingResume?.photoUrl) {
+        await del(existingResume.photoUrl);
+        console.log("Deleted old photo:", existingResume.photoUrl);
+      }
+
+      // Upload new photo
+      const blob = await put(fileName, photo, {
+        access: "public",
+      });
+
+      newPhotoUrl = blob.url;
+      console.log("New photo uploaded:", newPhotoUrl);
+    } catch (error) {
+      console.error("Photo upload failed:", error);
+      throw new Error("Failed to upload resume photo");
     }
+  } else if (photo === null && existingResume?.photoUrl) {
+    // ✅ If `photo` is `null`, delete the existing photo
+    await del(existingResume.photoUrl);
+    console.log("Photo removed for resume:", id);
     newPhotoUrl = null;
   }
 
-  if (id) {
-    return prisma.resume.update({
-      where: { id },
-      data: {
-        ...resumeValues,
-        photoUrl: newPhotoUrl,
-        workExperiences: {
-          deleteMany: {},
-          create: workExperiences?.map((exp) => ({
-            ...exp,
-            startDate: exp.startDate ? new Date(exp.startDate) : undefined,
-            endDate: exp.endDate ? new Date(exp.endDate) : undefined,
-          })),
+  try {
+    if (id) {
+      console.log("Updating existing resume:", id);
+      return await prisma.resume.update({
+        where: { id },
+        data: {
+          ...resumeValues,
+          photoUrl: newPhotoUrl,
+          workExperiences: {
+            deleteMany: {},
+            create: workExperiences?.map((exp) => ({
+              ...exp,
+              startDate: exp.startDate ? new Date(exp.startDate) : undefined,
+              endDate: exp.endDate ? new Date(exp.endDate) : undefined,
+            })),
+          },
+          educations: {
+            deleteMany: {},
+            create: educations?.map((edu) => ({
+              ...edu,
+              startDate: edu.startDate ? new Date(edu.startDate) : undefined,
+              endDate: edu.endDate ? new Date(edu.endDate) : undefined,
+            })),
+          },
+          updatedAt: new Date(),
         },
-        educations: {
-          deleteMany: {},
-          create: educations?.map((edu) => ({
-            ...edu,
-            startDate: edu.startDate ? new Date(edu.startDate) : undefined,
-            endDate: edu.endDate ? new Date(edu.endDate) : undefined,
-          })),
+      });
+    } else {
+      console.log("Creating new resume");
+      return await prisma.resume.create({
+        data: {
+          ...resumeValues,
+          userId,
+          photoUrl: newPhotoUrl,
+          workExperiences: {
+            create: workExperiences?.map((exp) => ({
+              ...exp,
+              startDate: exp.startDate ? new Date(exp.startDate) : undefined,
+              endDate: exp.endDate ? new Date(exp.endDate) : undefined,
+            })),
+          },
+          educations: {
+            create: educations?.map((edu) => ({
+              ...edu,
+              startDate: edu.startDate ? new Date(edu.startDate) : undefined,
+              endDate: edu.endDate ? new Date(edu.endDate) : undefined,
+            })),
+          },
         },
-        updatedAt: new Date(),
-      },
-    });
-  } else {
-    return prisma.resume.create({
-      data: {
-        ...resumeValues,
-        userId,
-        photoUrl: newPhotoUrl,
-        workExperiences: {
-          create: workExperiences?.map((exp) => ({
-            ...exp,
-            startDate: exp.startDate ? new Date(exp.startDate) : undefined,
-            endDate: exp.endDate ? new Date(exp.endDate) : undefined,
-          })),
-        },
-        educations: {
-          create: educations?.map((edu) => ({
-            ...edu,
-            startDate: edu.startDate ? new Date(edu.startDate) : undefined,
-            endDate: edu.endDate ? new Date(edu.endDate) : undefined,
-          })),
-        },
-      },
-    });
+      });
+    }
+  } catch (error) {
+    console.error("Failed to save resume:", error);
+    throw new Error("Failed to save resume");
   }
 }

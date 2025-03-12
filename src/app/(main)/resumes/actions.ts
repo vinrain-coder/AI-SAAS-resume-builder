@@ -23,15 +23,20 @@ export async function deleteResume(id: string) {
     throw new Error("Resume not found");
   }
 
-  if (resume.photoUrl) {
-    await del(resume.photoUrl);
+  try {
+    if (resume.photoUrl) {
+      await del(resume.photoUrl);
+      console.log("Deleted photo from blob storage:", resume.photoUrl);
+    }
+
+    await prisma.resume.delete({
+      where: { id },
+    });
+
+    console.log("Resume deleted successfully:", id);
+    revalidatePath("/resumes");
+  } catch (error) {
+    console.error("Error deleting resume:", error);
+    throw new Error("Failed to delete resume");
   }
-
-  await prisma.resume.delete({
-    where: {
-      id,
-    },
-  });
-
-  revalidatePath("/resumes");
 }

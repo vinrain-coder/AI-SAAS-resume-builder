@@ -34,7 +34,7 @@ export default function GenerateSummaryButton({
     try {
       setLoading(true);
       const aiResponse = await generateSummary(resumeData);
-      onSummaryGenerated(aiResponse);
+      // onSummaryGenerated(aiResponse);
     } catch (error) {
       console.error(error);
       toast({
